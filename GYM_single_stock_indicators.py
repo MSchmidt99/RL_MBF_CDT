@@ -62,7 +62,6 @@ class TimedTrailingStop:
 
 class DerivativesTradingEnv(gym.Env):
     """A derivatives trading environment for OpenAI gym"""
-    metadata = {'render.modes': ['human']}
 
     def __init__(
         self, df, train_end_ratio=None, n_lookback=30,
