@@ -330,7 +330,7 @@ class BoostedPPO:
             ).astype(float)
             probs_per_estimator = decision_per_estimator
         average = np.matmul(
-            model_weights, decision_per_estimator
+            model_weights, probs_per_estimator
         ) / np.sum(model_weights)
         variance = np.average(
             (probs_per_estimator-average) ** 2,
