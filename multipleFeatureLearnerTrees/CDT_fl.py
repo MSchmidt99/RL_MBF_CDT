@@ -2,41 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-"""
-learner_args = {
-    "feature_learner_args"          : [
-        {
-            "num_intermediate_variables"    : 8,
-            "feature_learning_depth"        : 2,
-            "weight_decay"                  : 0.001,
-            "exp_scheduler_gamma"           : 1.,
-            "beta_fl"                       : 1,
-        },
-        {
-            "num_intermediate_variables"    : 8,
-            "feature_learning_depth"        : 2,
-            "weight_decay"                  : 0.001,
-            "exp_scheduler_gamma"           : 1.,
-            "beta_fl"                       : 1,
-        }
-    ]
-    "decision_depth"                : 4,
-    "lr"                            : 1e-3,
-    "K_epoch"                       : 1,
-    "weight_decay"                  : 0.001,
-    "gamma"                         : 0.0,
-    "exp_scheduler_gamma"           : 1.,
-    "device"                        : "cuda:0" if torch.cuda.is_available() else "cpu",
-    "greatest_path_probability"     : 0,
-    "beta_dc"                       : 1,
-    "classification"                : 1,
-    "clip_sample_weights"           : [0.25, 4.],
-    "learn_probabilities"           : 1,
-    "max_loss_for_weight"           : None,
-    "fixed_model_weight"            : 1,
-}
-"""
-
 class CDT_fl(nn.Module):
     def __init__(self, args, input_dim, dc_args, name=""):
         super().__init__()
