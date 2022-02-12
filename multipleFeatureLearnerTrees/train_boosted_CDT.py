@@ -13,7 +13,7 @@ import torch.optim as optim
 # from torch.distributions import Categorical
 import numpy as np
 import pandas as pd
-from CDT_hierarchical_fl import CDT
+from .CDT_hierarchical_fl import CDT
 import sys
 sys.path.append("..")
 # from rl import StateNormWrapper

@@ -8,7 +8,7 @@ https://github.com/quantumiracle/Cascading-Decision-Tree/blob/d660c442175c3a05bc
 """
 import torch
 import torch.nn as nn
-from CDT_fl import CDT_fl
+from .CDT_fl import CDT_fl
 import numpy as np
 
 """
