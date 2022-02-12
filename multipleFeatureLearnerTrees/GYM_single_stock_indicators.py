@@ -193,7 +193,7 @@ class DerivativesTradingEnv(gym.Env):
         # they are both always 1.0.
         frame = frame.drop(["Close", "Volume"])
         if len(self.ignore_indicators) > 0:
-            frame = frame.drop(self.ignore_indicators)
+            frame = frame.drop(self.ignore_indicators, errors='ignore')
         if return_pandas:
             return frame
         return frame.values
