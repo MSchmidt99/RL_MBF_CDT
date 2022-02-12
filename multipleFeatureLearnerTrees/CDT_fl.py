@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+
 class CDT_fl(nn.Module):
     def __init__(self, args, input_dim, dc_args, name=""):
         super().__init__()
@@ -36,7 +37,7 @@ class CDT_fl(nn.Module):
             self.optimizer,
             gamma=dc_args['exp_scheduler_gamma']
         )
-        
+
     def get_tree_weights(self, Bias=False):
         """Return tree weights as a list"""
         if Bias:
@@ -49,7 +50,7 @@ class CDT_fl(nn.Module):
                     self.fl_inner_nodes.weight[:, 1:]
                 )
             )
-        
+
     def get_feature_weights(self):
         return self._to_numpy(
             self.fl_leaf_weights
@@ -58,7 +59,7 @@ class CDT_fl(nn.Module):
             self.args['num_intermediate_variables'],
             self.input_dim
         )
-    
+
     def feature_learning_init(self):
         self.num_fl_inner_nodes = 2 ** self.args['feature_learning_depth'] - 1
         self.num_fl_leaves = self.num_fl_inner_nodes + 1
@@ -112,7 +113,7 @@ class CDT_fl(nn.Module):
             end_idx = begin_idx + 2 ** (layer_idx + 1)
         mu = _mu.view(self.batch_size, self.num_fl_leaves)
         return mu
-    
+
     def intermediate_features_construct(self, data):
         """
         Construct the intermediate features for decision making, with learned
@@ -133,7 +134,7 @@ class CDT_fl(nn.Module):
             )
         )  # return: (batch_size * num_fl_leaves, num_intermediate_variables)
         return features
-        
+
     """ Add constant 1 onto the front of each instance, serving as the bias """
     def _data_augment_(self, input):
         batch_size = input.size()[0]
@@ -141,7 +142,7 @@ class CDT_fl(nn.Module):
         bias = torch.ones(batch_size, 1).to(self.device)
         input = torch.cat((bias, input), 1)
         return input
-        
+
     def _to_numpy(self, torch_tensor):
         return np.copy(
             torch_tensor.detach().cpu().numpy()

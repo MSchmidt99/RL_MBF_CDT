@@ -126,33 +126,50 @@ class CDT(nn.Module):
 
     def feature_learning_init(self, fl_args):
         if isinstance(fl_args, dict):
-            self.feature_learners = CDT_fl(fl_args, self.args['input_dim'], self.args)
+            self.feature_learners = CDT_fl(
+                fl_args,
+                self.args['input_dim'],
+                self.args
+            )
             next_dim = fl_args['num_intermediate_variables']
         else:
             self.feature_learners = []
             for series_idx, _fl_args in enumerate(fl_args):
                 if series_idx == 0:
                     self.feature_learners.append(
-                        CDT_fl(_fl_args, self.args['input_dim'], self.args, name=f"FL_{series_idx}")
+                        CDT_fl(
+                            _fl_args,
+                            self.args['input_dim'],
+                            self.args,
+                            name=f"FL_{series_idx}"
+                        )
                     )
                     next_dim = _fl_args['num_intermediate_variables']
                 else:
                     self.feature_learners.append(
-                        CDT_fl(_fl_args, next_dim, self.args, name=f"FL_{series_idx}")
+                        CDT_fl(
+                            _fl_args,
+                            next_dim,
+                            self.args,
+                            name=f"FL_{series_idx}"
+                        )
                     )
                     next_dim = _fl_args['num_intermediate_variables']
         self.args['num_intermediate_variables'] = next_dim
-    
+
     def feature_learning_forward(self):
         if isinstance(self.feature_learners, list):
             probs = []
             self.features = self.data
             batch_size = self.batch_size
             for feature_learner in self.feature_learners:
-                probs.append(feature_learner \
-                             .feature_learning_forward(self.features, batch_size))
+                probs.append(
+                    feature_learner.feature_learning_forward(
+                        self.features, batch_size
+                    )
+                )
                 self.features = feature_learner \
-                                .intermediate_features_construct(self.features)
+                    .intermediate_features_construct(self.features)
                 batch_size *= feature_learner.num_fl_leaves
             return probs
         else:
@@ -194,7 +211,7 @@ class CDT(nn.Module):
         """
         # add bias to self.features
         # (batch_size * num_fl_leaves, num_intermediate_variables + 1)
-        
+
         aug_features = self._data_augment_(self.features)
         # (batch_size * num_fl_leaves, num_dc_inner_nodes)
         path_prob = self.sigmoid(
@@ -238,19 +255,26 @@ class CDT(nn.Module):
         # (batch_size, num_fl_leaves)
         fl_probs = self.feature_learning_forward()
         dc_probs = self.decision_forward()
-        
+
         if isinstance(fl_probs, list):
             _fl_probs = [fl_probs[0]]
             for i in range(1, len(fl_probs)):
                 dc_probs = dc_probs.view(
-                    self.batch_size, self.feature_learners[i-1].num_fl_leaves, -1
+                    self.batch_size,
+                    self.feature_learners[i-1].num_fl_leaves,
+                    -1
                 )
-                dc_probs = torch.bmm(_fl_probs[i-1].unsqueeze(1), dc_probs).squeeze(1)
+                dc_probs = torch.bmm(
+                    _fl_probs[i-1].unsqueeze(1),
+                    dc_probs
+                ).squeeze(1)
                 _fl_probs.append(
                     torch.bmm(
                         _fl_probs[i-1].unsqueeze(1),
                         fl_probs[i].view(
-                            self.batch_size, -1, self.feature_learners[i].num_fl_leaves
+                            self.batch_size,
+                            -1,
+                            self.feature_learners[i].num_fl_leaves
                         )
                     ).squeeze(1)
                 )
@@ -260,10 +284,14 @@ class CDT(nn.Module):
             _mu = torch.bmm(_fl_probs[-1].unsqueeze(1), dc_probs).squeeze(1)
         else:
             # (batch_size, num_fl_leaves, num_dc_leaves)
-            dc_probs = dc_probs.view(self.batch_size, self.feature_learners.num_fl_leaves, -1)
+            dc_probs = dc_probs.view(
+                self.batch_size,
+                self.feature_learners.num_fl_leaves,
+                -1
+            )
             # (batch_size, num_dc_leaves)
             _mu = torch.bmm(fl_probs.unsqueeze(1), dc_probs).squeeze(1)
-        
+
         output = self.decision_leaves(_mu)
 
         prediction = output
