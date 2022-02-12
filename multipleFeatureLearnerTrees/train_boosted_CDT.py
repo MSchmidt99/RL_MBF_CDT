@@ -165,6 +165,9 @@ class BoostedPPO:
         )
         self.learn_probabilities = learner_args.get('learn_probabilities', 0)
         self.estimators = []
+        
+        if isinstance(self.max_features, float):
+            self.max_features = int(self.state_dim * self.max_features)
 
     def train_net(self):
         sample_weights = np.ones((len(self.train), 1))
@@ -174,7 +177,7 @@ class BoostedPPO:
             state_mask[
                 np.random.choice(
                     np.arange(self.state_dim),
-                    size=int(self.state_dim * self.max_features),
+                    size=self.max_features,
                     replace=False
                 )
             ] = True
