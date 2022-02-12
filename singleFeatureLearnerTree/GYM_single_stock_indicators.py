@@ -107,7 +107,7 @@ class DerivativesTradingEnv(gym.Env):
         return self._observation_calculations(
             self.df.loc[
                 self.current_step - self.n_lookback : self.current_step
-            ],
+            ].copy(),
             return_pandas=return_pandas
         )
 
@@ -193,7 +193,7 @@ class DerivativesTradingEnv(gym.Env):
         # they are both always 1.0.
         frame = frame.drop(["Close", "Volume"])
         if len(self.ignore_indicators) > 0:
-            frame = frame.drop(self.ignore_indicators, errors='ignore')
+            frame = frame.drop(self.ignore_indicators)
         if return_pandas:
             return frame
         return frame.values
