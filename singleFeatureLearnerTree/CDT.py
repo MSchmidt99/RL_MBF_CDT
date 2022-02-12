@@ -266,7 +266,6 @@ class CDT(nn.Module):
             output = torch.log(output)
             prediction = torch.log(prediction)
 
-        kill
         return prediction, output, 0
 
     """ Add constant 1 onto the front of each instance, serving as the bias """
