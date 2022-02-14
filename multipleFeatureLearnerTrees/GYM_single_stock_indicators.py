@@ -188,7 +188,7 @@ class DerivativesTradingEnv(gym.Env):
                 open="Open", high="High",
                 low="Low", close="Close",
                 volume="Volume"
-            ).loc[0].dropna()
+            ).loc[0].fillna(0)
         # since Close[0] and Volume[0] are normalized by themselves,
         # they are both always 1.0.
         frame = frame.drop(["Close", "Volume"])
