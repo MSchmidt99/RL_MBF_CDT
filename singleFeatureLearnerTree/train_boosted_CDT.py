@@ -116,6 +116,9 @@ class PPO(nn.Module):
         else:
             loss = self.softXEnt(q_vals, td_target)
 
+        # orient loss so minimum is 0, only effects learn_probabilities
+        loss -= self.softXEnt(td_target, td_target)
+
         # mask loss for largest decision signal in this sample
         loss = torch.sum(loss * max_target_mask, dim=1)
         if isinstance(self.sample_weights, torch.Tensor) and i is not None:
@@ -125,8 +128,9 @@ class PPO(nn.Module):
         return loss
 
     def softXEnt(self, input, target):
-        logprobs = torch.log(input)
-        inv_logprobs = torch.log(1 - input)
+        # log will only be nan when input is 0 or 1
+        logprobs = torch.log(input + 1e-44)
+        inv_logprobs = torch.log(1 - input + 1e-44)
         loss_per_action = - (
             (target * logprobs) + ((1-target) * inv_logprobs)
         )
