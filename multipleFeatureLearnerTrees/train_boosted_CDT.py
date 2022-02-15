@@ -34,6 +34,7 @@ class PPO(nn.Module):
         self.weight_decay = learner_args.get('weight_decay', 0.1)
         self.exp_gamma = learner_args.get('exp_scheduler_gamma', 0.98)
         self.learn_probabilities = learner_args.get('learn_probabilities', 0)
+        self.loss_batch_size = learner_args.get('loss_batch_size', 1)
 
         self.sample_weights = (
             self._to_tensor(sample_weights)
@@ -80,7 +81,7 @@ class PPO(nn.Module):
 
     def train_net(self):
         batch = self.make_batch()
-
+        loss_batch = []
         for epoch in range(self.K_epoch):
             for i, row in batch.iterrows():
                 s, rs, s_prime = (
@@ -89,10 +90,13 @@ class PPO(nn.Module):
                     self._to_tensor([row["s'"]])
                 )
                 loss = self.calc_loss(s, rs, s_prime, i=i)
-
-                self.optimizer.zero_grad()
-                loss.mean().backward()
-                self.optimizer.step()
+                loss_batch.append(loss)
+                
+                if i % self.loss_batch_size == 0 or i == len(batch) - 1:
+                    self.optimizer.zero_grad()
+                    torch.cat(loss_batch, 0).mean().backward()
+                    loss_batch = []
+                    self.optimizer.step()
 
     def calc_loss(self, s, rs, s_prime, i=None):
         if isinstance(self.state_mask, torch.Tensor):
