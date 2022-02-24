@@ -202,16 +202,19 @@ class PPO(nn.Module):
 
 def run(
     train_env, learner_args, reuse_data=None, train=False, test=False,
-    train_ratio=0.80,
+    train_ratio=0.80, state_mask=None
 ):
-    state_dim = train_env.observation_space.shape[0]
+    if not isinstance(state_mask, type(None)):
+        state_dim = sum(state_mask)
+    else:
+        state_dim = train_env.observation_space.shape[0]
     action_dim = train_env.action_space.shape[0]
     learner_args["input_dim"] = state_dim
     learner_args["output_dim"] = action_dim
 
     print(state_dim, action_dim)
     model = PPO(  # model
-        state_dim=state_dim, action_dim=action_dim, learner_args=learner_args,
+        state_dim=state_dim, action_dim=action_dim, learner_args=learner_args, state_mask=state_mask
     )
     
     if isinstance(reuse_data, type(None)):

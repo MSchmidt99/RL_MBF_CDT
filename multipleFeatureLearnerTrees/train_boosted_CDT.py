@@ -81,22 +81,18 @@ class PPO(nn.Module):
 
     def train_net(self):
         batch = self.make_batch()
-        loss_batch = []
         for epoch in range(self.K_epoch):
-            for i, row in batch.iterrows():
+            for i in range(0, len(batch), self.loss_batch_size):
+                rows = batch.iloc[i:i+self.loss_batch_size]
                 s, rs, s_prime = (
-                    self._to_tensor([row["s"]]),
-                    self._to_tensor([row["rs"]]),
-                    self._to_tensor([row["s'"]])
+                    self._to_tensor(np.vstack(rows["s"].values)),
+                    self._to_tensor(np.vstack(rows["rs"].values)),
+                    self._to_tensor(np.vstack(rows["s'"].values))
                 )
                 loss = self.calc_loss(s, rs, s_prime, i=i)
-                loss_batch.append(loss)
-                
-                if i % self.loss_batch_size == 0 or i == len(batch) - 1:
-                    self.optimizer.zero_grad()
-                    torch.cat(loss_batch, 0).mean().backward()
-                    loss_batch = []
-                    self.optimizer.step()
+                self.optimizer.zero_grad()
+                loss.mean().backward()
+                self.optimizer.step()
 
     def calc_loss(self, s, rs, s_prime, i=None):
         if isinstance(self.state_mask, torch.Tensor):
@@ -109,8 +105,10 @@ class PPO(nn.Module):
         # get prediction and target
         q_vals = self.calc_probs(s)
         td_target = self.softmax(rs) + self.gamma * self.calc_probs(s_prime)
-        td_target = td_target / torch.sum(td_target, dim=1)
-        max_target_mask = torch.eq(td_target, td_target.max(dim=1)[0]).float()
+        td_target = td_target / torch.sum(td_target, dim=1).unsqueeze(1)
+        max_target_mask = torch.eq(
+            td_target, td_target.max(dim=1)[0].unsqueeze(1)
+        ).float()
 
         # calc cross entropy loss using target mask or real probabilities
         if not self.learn_probabilities:
@@ -125,7 +123,7 @@ class PPO(nn.Module):
         loss = torch.sum(loss * max_target_mask, dim=1)
         if isinstance(self.sample_weights, torch.Tensor) and i is not None:
             # apply sample weights
-            loss *= self.sample_weights[i]
+            loss *= self.sample_weights[i:i+self.loss_batch_size].squeeze(1)
 
         return loss
 
@@ -172,6 +170,7 @@ class BoostedPPO:
             'clip_sample_weights', [0.8, 1.2]
         )
         self.learn_probabilities = learner_args.get('learn_probabilities', 0)
+        self.loss_batch_size = learner_args.get('loss_batch_size', 1)
         self.estimators = []
         
         if isinstance(self.max_features, float):
@@ -202,32 +201,35 @@ class BoostedPPO:
 
             # eval model on train for per sample loss
             loss_per_sample = []
-            for idx, row in self.train.iterrows():
+            for idx in range(0, len(self.train), self.loss_batch_size):
+                rows = self.train.iloc[idx:idx+self.loss_batch_size]
                 s, rs, s_prime = (
-                    model._to_tensor([row["s"]]),
-                    model._to_tensor([row["rs"]]),
-                    model._to_tensor([row["s'"]])
+                    model._to_tensor(np.vstack(rows["s"].values)),
+                    model._to_tensor(np.vstack(rows["rs"].values)),
+                    model._to_tensor(np.vstack(rows["s'"].values))
                 )
                 train_loss = self._to_numpy(
                     model.calc_loss(s, rs, s_prime, idx)
                 )
                 loss_per_sample.append(train_loss)
+            loss_per_sample = np.concatenate(loss_per_sample)[:, np.newaxis]
 
             # eval model on val for model weight
             model_loss = None
-            for idx, row in self.val.iterrows():
+            for idx in range(0, len(self.val), self.loss_batch_size):
+                rows = self.val.iloc[idx:idx+self.loss_batch_size]
                 s, rs, s_prime = (
-                    model._to_tensor([row["s"]]),
-                    model._to_tensor([row["rs"]]),
-                    model._to_tensor([row["s'"]])
+                    model._to_tensor(np.vstack(rows["s"].values)),
+                    model._to_tensor(np.vstack(rows["rs"].values)),
+                    model._to_tensor(np.vstack(rows["s'"].values))
                 )
                 val_loss = self._to_numpy(model.calc_loss(s, rs, s_prime))
                 if isinstance(model_loss, type(None)):
-                    model_loss = val_loss
+                    model_loss = np.sum(val_loss, axis=0)
                 else:
-                    model_loss += val_loss
+                    model_loss += np.sum(val_loss, axis=0)
+            model_loss = (model_loss / len(self.val))
 
-            model_loss = (model_loss / len(self.val))[0]
             if not self.fixed_model_weight:
                 if self.max_loss_for_weight is not None:
                     model_weight = 0.5 * np.log(
@@ -357,12 +359,25 @@ class BoostedPPO:
             fl_weights = estimator['estimator'].cdt.get_fl_input_weights()
 
             dc_tree_imp = np.mean(np.abs(tree_weights[1]), axis=0)
+            # get normalized importance of each feature in endmost inner nodes
             feat_tree_imp = dc_tree_imp[np.newaxis, :]
+            feat_tree_imp /= feat_tree_imp.sum()
             for i in range(-1, -len(fl_weights)-1, -1):
+                # get normalized importance of each feature in leaves
+                # preceeding the tree importance
                 fl_leaf_imp = np.mean(np.abs(fl_weights[i]), axis=0)
+                fl_leaf_imp /= fl_leaf_imp.sum()
+                # dot prod of importances for the tree onto the
+                # leaves preceeding it
                 fl_feat_imp = feat_tree_imp @ fl_leaf_imp
+                # get normalized importance of each feature in inner nodes prior
                 fl_tree_imp = np.mean(np.abs(tree_weights[0][i]), axis=0)
-                feat_tree_imp = fl_feat_imp * fl_tree_imp
+                fl_tree_imp /= fl_tree_imp.sum()
+                # add normalized importance of features for sub-feature trees
+                # to normalized importance of features for branching logic leading
+                # to sub-feature trees
+                feat_tree_imp = fl_feat_imp + fl_tree_imp[np.newaxis, :]
+                feat_tree_imp /= feat_tree_imp.sum()
 
             feat_imp = feat_tree_imp.flatten()
             feat_imp /= np.sum(feat_imp)
