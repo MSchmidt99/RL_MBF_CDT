@@ -1,11 +1,8 @@
 """
 PPO with cascading decision tree (CDT) as policy function approximator
 
-Taken from the following:
+Modified from the following:
 https://github.com/quantumiracle/Cascading-Decision-Tree/blob/d660c442175c3a05bc70c1a45eb3eb9d91242260/src/cdt/deprecated/cdt_rl_train.py
-
-Modified loss function
-Added wrapper function which strings together CDTs into a boosted forest
 """
 import torch
 import torch.nn as nn
@@ -132,6 +129,7 @@ class PPO(nn.Module):
         return loss
 
     def softXEnt(self, input, target):
+        # https://www.desmos.com/calculator/zlzedjdfif
         # log will only be nan when input is 0 or 1
         logprobs = torch.log(input + 1e-44)
         inv_logprobs = torch.log(1 - input + 1e-44)
@@ -203,57 +201,58 @@ class BoostedPPO:
             model.train_net()
 
             # eval model on train for per sample loss
-            loss_per_sample = []
-            for idx, row in self.train.iterrows():
-                s, rs, s_prime = (
-                    model._to_tensor([row["s"]]),
-                    model._to_tensor([row["rs"]]),
-                    model._to_tensor([row["s'"]])
+            loss_per_sample = [
+                self._to_numpy(
+                    model.calc_loss(
+                        model._to_tensor([row["s"]]),
+                        model._to_tensor([row["rs"]]),
+                        model._to_tensor([row["s'"]]),
+                        idx
+                    )
                 )
-                train_loss = self._to_numpy(
-                    model.calc_loss(s, rs, s_prime, idx)
-                )
-                loss_per_sample.append(train_loss)
+                for idx, row in self.train.iterrows()
+            ]
+            train_loss_unweighted = loss_per_sample / sample_weights
 
             # eval model on val for model weight
-            model_loss = None
-            for idx, row in self.val.iterrows():
-                s, rs, s_prime = (
-                    model._to_tensor([row["s"]]),
-                    model._to_tensor([row["rs"]]),
-                    model._to_tensor([row["s'"]])
+            val_loss = np.sum([
+                self._to_numpy(
+                    model.calc_loss(
+                        model._to_tensor([row["s"]]),
+                        model._to_tensor([row["rs"]]),
+                        model._to_tensor([row["s'"]])
+                    )
                 )
-                val_loss = self._to_numpy(model.calc_loss(s, rs, s_prime))
-                if isinstance(model_loss, type(None)):
-                    model_loss = val_loss
-                else:
-                    model_loss += val_loss
+                for idx, row in self.val.iterrows()
+            ], axis=0)
+            val_loss = (val_loss / len(self.val))[0]
 
-            model_loss = (model_loss / len(self.val))[0]
-            if not self.fixed_model_weight:
-                if self.max_loss_for_weight is not None:
-                    model_weight = 0.5 * np.log(
-                        (
-                            (2 * self.max_loss_for_weight) - model_loss
-                        ) / model_loss
-                    )
-                    model_weight = max(model_weight, 1e-9)
-                else:
-                    model_weight = np.exp(-(model_loss + 0.1)) / (
-                        1 - np.exp(-(model_loss + 0.1))
-                    )
-            else:
-                model_weight = 1
+            # remove effect of sample weights then mean
+            training_loss = np.mean(
+                train_loss_unweighted, axis=0
+            )[0]
+            
+            # calc loss of ensemble for new sample_weights
+            EPS = 1e-10
+            # loss function used ranges from [0,inf)
+            # thus alpha calculation must be modified.
+            alpha = 0.5 * np.log(
+                1 / np.minimum(training_loss + EPS, 1)
+            )
+            sample_weights *= np.exp(-alpha)
+            sample_weights /= np.mean(sample_weights)
+            model_weight = alpha if not self.fixed_model_weight else 1
 
             # save estimator to ensemble data
             self.estimators.append({
                 'estimator': model,
                 'weight': np.array(model_weight),
-                'q_value losses': np.array(model_loss),
-                'loss per sample': np.array(loss_per_sample),
+                'q_value losses': np.array(val_loss),
+                'loss per sample': np.array(train_loss_unweighted),
                 'features mask': state_mask
             })
-
+            
+            # --------------------------------------
             # calculate metrics for progress logging
             total_val_loss = np.zeros((1,))
             total_weights = np.zeros((1,))
@@ -263,11 +262,8 @@ class BoostedPPO:
                 )
                 total_weights += estimator_data['weight']
 
-            weighted_training_loss = np.average(
+            weighted_training_loss = np.mean(
                 np.array(loss_per_sample), axis=0
-            )[0]
-            training_loss = np.mean(
-                loss_per_sample / sample_weights, axis=0
             )[0]
             validation_loss = (
                 np.array(total_val_loss) / np.array(total_weights)
@@ -276,20 +272,10 @@ class BoostedPPO:
             print(
                 f"\tweighted training loss: {weighted_training_loss:.4f} "
                 f"training loss: {training_loss:.4f} "
-                f"validation loss: {np.array(model_loss):.4f} "
+                f"validation loss: {np.array(val_loss):.4f} "
                 f"weight: {np.array(model_weight):.4f} "
             )
             print(f"Ensemble validation loss: {validation_loss[0]:.4f}")
-
-            # calc loss of ensemble for new sample_weights
-            ensemble_loss_per_sample = self.calc_ensemble_loss_per_sample()
-            sample_weights = np.clip(
-                ensemble_loss_per_sample / np.mean(
-                    ensemble_loss_per_sample,
-                    axis=0
-                ),
-                self.clip_sample_weights[0], self.clip_sample_weights[1]
-            )
 
     def calc_ensemble_loss_per_sample(self):
         model_weights = np.array([

@@ -171,6 +171,7 @@ class PPO(nn.Module):
         return loss
 
     def softXEnt(self, input, target):
+        # https://www.desmos.com/calculator/zlzedjdfif
         # log will only be nan when input is 0 or 1
         logprobs = torch.log(input + 1e-44)
         inv_logprobs = torch.log(1 - input + 1e-44)
