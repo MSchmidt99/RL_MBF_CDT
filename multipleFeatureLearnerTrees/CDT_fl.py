@@ -2,6 +2,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+"""
+Modified from the following:
+https://github.com/quantumiracle/Cascading-Decision-Tree/blob/d660c442175c3a05bc70c1a45eb3eb9d91242260/src/cdt/CDT.py
+
+For use with CDT_hierarchical_fl.py, allows for N feature learning trees to be cascaded
+before the final result is calculated with a decision tree in CDT_hierarchical_fl.
+"""
 
 class CDT_fl(nn.Module):
     def __init__(self, args, input_dim, dc_args, name=""):

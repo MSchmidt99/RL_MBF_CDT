@@ -1,11 +1,8 @@
 """
 PPO with cascading decision tree (CDT) as policy function approximator
 
-Taken from the following:
+Modified from the following:
 https://github.com/quantumiracle/Cascading-Decision-Tree/blob/d660c442175c3a05bc70c1a45eb3eb9d91242260/src/cdt/deprecated/cdt_rl_train.py
-
-Modified loss function
-Added wrapper function which strings together CDTs into a boosted forest
 """
 import torch
 import torch.nn as nn

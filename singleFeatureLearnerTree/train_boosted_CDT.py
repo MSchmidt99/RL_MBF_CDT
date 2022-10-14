@@ -164,13 +164,7 @@ class BoostedPPO:
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.learner_args = learner_args
-        self.max_loss_for_weight = learner_args.get(
-            'max_loss_for_weight', None
-        )
         self.fixed_model_weight = learner_args.get('fixed_model_weight', 0)
-        self.clip_sample_weights = learner_args.get(
-            'clip_sample_weights', [0.8, 1.2]
-        )
         self.learn_probabilities = learner_args.get('learn_probabilities', 0)
         self.estimators = []
         

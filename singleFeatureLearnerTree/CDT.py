@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Cascade a feature learning tree and a soft decision tree (sparse in features)
-
-Taken from below:
+Taken from below (nearly unmodified):
 https://github.com/quantumiracle/Cascading-Decision-Tree/blob/d660c442175c3a05bc70c1a45eb3eb9d91242260/src/cdt/CDT.py
 
 """

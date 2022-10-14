@@ -1,11 +1,8 @@
 """
 PPO with cascading decision tree (CDT) as policy function approximator
 
-Taken from the following:
+Modified from the following:
 https://github.com/quantumiracle/Cascading-Decision-Tree/blob/d660c442175c3a05bc70c1a45eb3eb9d91242260/src/cdt/deprecated/cdt_rl_train.py
-
-Modified loss function
-Added wrapper function which strings together CDTs into a boosted forest
 """
 import torch
 import torch.nn as nn
@@ -40,15 +37,16 @@ class PPO(nn.Module):
             self._to_tensor(sample_weights)
             if not isinstance(sample_weights, type(None)) else None
         )
+
+        args = learner_args.copy()
+
         if not isinstance(state_mask, type(None)):
             self.state_mask = self._to_tensor(state_mask, dtype=torch.bool)
-            args = learner_args.copy()
             args['input_dim'] = state_dim
-            self.cdt = CDT(args).to(self.device)
         else:
             self.state_mask = None
-            self.cdt = CDT(learner_args).to(self.device)
 
+        self.cdt = CDT(args).to(self.device)
         self.softmax = nn.Softmax(dim=1)
         self.calc_probs = lambda x: self.cdt.forward(x)[1]
 
@@ -163,13 +161,7 @@ class BoostedPPO:
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.learner_args = learner_args
-        self.max_loss_for_weight = learner_args.get(
-            'max_loss_for_weight', None
-        )
         self.fixed_model_weight = learner_args.get('fixed_model_weight', 0)
-        self.clip_sample_weights = learner_args.get(
-            'clip_sample_weights', [0.8, 1.2]
-        )
         self.learn_probabilities = learner_args.get('learn_probabilities', 0)
         self.loss_batch_size = learner_args.get('loss_batch_size', 1)
         self.estimators = []

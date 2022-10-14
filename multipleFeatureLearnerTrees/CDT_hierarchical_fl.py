@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Cascade a feature learning tree and a soft decision tree (sparse in features)
-
-Taken from below:
+Modified from the following:
 https://github.com/quantumiracle/Cascading-Decision-Tree/blob/d660c442175c3a05bc70c1a45eb3eb9d91242260/src/cdt/CDT.py
 
+Seperated feature learning tree from the rest of the tree pipeline (now CDT_fl.py), parameterized
+the inclusion of N feature learning trees in a cascading orientation, and modified importance
+calculations to account for each of the N feature learning trees.
 """
 import torch
 import torch.nn as nn
@@ -39,9 +40,7 @@ learner_args = {
     "greatest_path_probability"     : 0,
     "beta_dc"                       : 1,
     "classification"                : 1,
-    "clip_sample_weights"           : [0.25, 4.],
     "learn_probabilities"           : 1,
-    "max_loss_for_weight"           : None,
     "fixed_model_weight"            : 1,
 }
 """
