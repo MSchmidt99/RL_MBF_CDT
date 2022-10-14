@@ -148,7 +148,8 @@ class DerivativesTradingEnv(gym.Env):
     def step_all(self):
         # With derivatives we are in a lucky spot where the
         # previous decision does not impact the returns of
-        # the next decision, thus we can use this step_all
+        # the next decision (bar the effect that the trade
+        # had on the market), thus we can use this step_all
         # method to build out a lookup table of the rewards
         # for each possible decision.
         reward0 = self._take_action(0)
