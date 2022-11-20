@@ -19,7 +19,10 @@ class CDT_fl(nn.Module):
         self.device = torch.device(dc_args.get('device', 'cpu'))
         self.name = name
 
-        self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=1)
+        self.LeakyReLU = nn.LeakyReLU(
+            negative_slope=self.args.get("tree_LReLU_neg_slope", 0.05)
+        )
 
         self.feature_learning_init()
 
@@ -101,12 +104,13 @@ class CDT_fl(nn.Module):
         self.batch_size = batch_size
         aug_data = self._data_augment_(data)
         # (batch_size, num_fl_inner_nodes)
-        path_prob = self.sigmoid(
-            self.beta_fl * self.fl_inner_nodes(aug_data)
-        )
+        path_prob = self.beta_fl * self.fl_inner_nodes(aug_data)
 
         path_prob = torch.unsqueeze(path_prob, dim=2)
-        path_prob = torch.cat((path_prob, 1-path_prob), dim=2)
+        path_prob = torch.cat(
+            (self.LeakyReLU(path_prob), self.LeakyReLU(-path_prob)),
+            dim=2
+        )
         _mu = aug_data.data.new(self.batch_size, 1, 1).fill_(1.)
 
         begin_idx = 0
@@ -115,11 +119,11 @@ class CDT_fl(nn.Module):
             _path_prob = path_prob[:, begin_idx:end_idx, :]
 
             _mu = _mu.view(self.batch_size, -1, 1).repeat(1, 1, 2)
-            _mu = _mu * _path_prob
+            _mu = _mu + _path_prob
             begin_idx = end_idx  # index for each layer
             end_idx = begin_idx + 2 ** (layer_idx + 1)
         mu = _mu.view(self.batch_size, self.num_fl_leaves)
-        return mu
+        return self.softmax(mu)
 
     def intermediate_features_construct(self, data):
         """

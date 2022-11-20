@@ -112,6 +112,11 @@ class PPO(nn.Module):
         if not self.learn_probabilities:
             loss = self.softXEnt(q_vals, max_target_mask)
         else:
+            # https://www.desmos.com/calculator/syrhadqppv
+            offset = ((td_target > 0.5) * (-0.01)) + ((td_target <= 0.5) * 0.01)
+            q_vals += offset
+            q_vals[q_vals > 1] = 1
+            q_vals[q_vals < 0] = 0
             loss = self.softXEnt(q_vals, td_target)
 
         # orient loss so minimum is 0, only effects learn_probabilities
@@ -189,7 +194,7 @@ class BoostedPPO:
             ).to(self.learner_args['device'])
 
             # insert train data and train model
-            model.train = self.train
+            model.train = self.train.copy()
             model.train_net()
 
             # eval model on train for per sample loss
@@ -335,13 +340,16 @@ class BoostedPPO:
         )
         return average, np.sqrt(variance)
 
-    def get_feature_importances(self, use_estimator_weights=True):
+    def get_feature_importances(self, use_estimator_weights=True, binary=False):
         feature_weights = []
         for estimator in self.estimators:
             tree_weights = estimator['estimator'].cdt.get_tree_weights()
             fl_weights = estimator['estimator'].cdt.get_fl_input_weights()
 
             dc_tree_imp = np.mean(np.abs(tree_weights[1]), axis=0)
+            if binary:
+                dc_tree_imp = (dc_tree_imp > 0).astype(float)
+
             # get normalized importance of each feature in endmost inner nodes
             feat_tree_imp = dc_tree_imp[np.newaxis, :]
             feat_tree_imp /= feat_tree_imp.sum()
@@ -349,12 +357,16 @@ class BoostedPPO:
                 # get normalized importance of each feature in leaves
                 # preceeding the tree importance
                 fl_leaf_imp = np.mean(np.abs(fl_weights[i]), axis=0)
+                if binary:
+                    fl_leaf_imp = (fl_leaf_imp > 0).astype(float)
                 fl_leaf_imp /= fl_leaf_imp.sum()
                 # dot prod of importances for the tree onto the
                 # leaves preceeding it
                 fl_feat_imp = feat_tree_imp @ fl_leaf_imp
                 # get normalized importance of each feature in inner nodes prior
                 fl_tree_imp = np.mean(np.abs(tree_weights[0][i]), axis=0)
+                if binary:
+                    fl_tree_imp = (fl_tree_imp > 0).astype(float)
                 fl_tree_imp /= fl_tree_imp.sum()
                 # add normalized importance of features for sub-feature trees
                 # to normalized importance of features for branching logic leading

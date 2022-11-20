@@ -150,13 +150,20 @@ class PPO(nn.Module):
         # get prediction and target
         q_vals = self.calc_probs(s)
         td_target = self.softmax(rs) + self.gamma * self.calc_probs(s_prime)
-        td_target = td_target / torch.sum(td_target, dim=1)
-        max_target_mask = torch.eq(td_target, td_target.max(dim=1)[0]).float()
+        td_target = td_target / torch.sum(td_target, dim=1).unsqueeze(1)
+        max_target_mask = torch.eq(
+            td_target, td_target.max(dim=1)[0].unsqueeze(1)
+        ).float()
 
         # calc cross entropy loss using target mask or real probabilities
         if not self.learn_probabilities:
             loss = self.softXEnt(q_vals, max_target_mask)
         else:
+            # https://www.desmos.com/calculator/syrhadqppv
+            offset = ((td_target > 0.5) * (-0.01)) + ((td_target <= 0.5) * 0.01)
+            q_vals += offset
+            q_vals[q_vals > 1] = 1
+            q_vals[q_vals < 0] = 0
             loss = self.softXEnt(q_vals, td_target)
 
         # orient loss so minimum is 0, only effects learn_probabilities

@@ -14,34 +14,38 @@ import numpy as np
 
 """
 learner_args = {
-    "feature_learner_args"          : [
+    "feature_learner_args"          : [ # can have as many of these as needed
         {
             "num_intermediate_variables"    : 8,
             "feature_learning_depth"        : 2,
+            "tree_LReLU_neg_slope"          : 0.05,
             "weight_decay"                  : 0.001,
             "exp_scheduler_gamma"           : 1.,
             "beta_fl"                       : 1,
         },
         {
-            "num_intermediate_variables"    : 8,
-            "feature_learning_depth"        : 2,
+            "num_intermediate_variables"    : 4,
+            "feature_learning_depth"        : 3,
+            "tree_LReLU_neg_slope"          : 0.05,
             "weight_decay"                  : 0.001,
             "exp_scheduler_gamma"           : 1.,
             "beta_fl"                       : 1,
         }
-    ]
+    ],
     "decision_depth"                : 4,
-    "lr"                            : 1e-3,
-    "K_epoch"                       : 1,
+    "tree_LReLU_neg_slope"          : 0.05,
+    "lr"                            : 2e-3,
+    "K_epoch"                       : 15,
     "weight_decay"                  : 0.001,
-    "gamma"                         : 0.0,
+    "gamma"                         : 0.2,
     "exp_scheduler_gamma"           : 1.,
-    "device"                        : "cuda:0" if torch.cuda.is_available() else "cpu",
+    "device"                        : "cpu", # "cuda:0" if torch.cuda.is_available() else "cpu",
     "greatest_path_probability"     : 0,
     "beta_dc"                       : 1,
     "classification"                : 1,
     "learn_probabilities"           : 1,
     "fixed_model_weight"            : 1,
+    "loss_batch_size"               : 5,
 }
 """
 
@@ -53,8 +57,10 @@ class CDT(nn.Module):
         # print('CDT parameters: ', args)
         self.device = torch.device(self.args.get('device', 'cpu'))
 
-        self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=1)
+        self.LeakyReLU = nn.LeakyReLU(
+            negative_slope=self.args.get("tree_LReLU_neg_slope", 0.05)
+        )
 
         self.feature_learning_init(self.args['feature_learner_args'])
         self.decision_init()
@@ -213,15 +219,17 @@ class CDT(nn.Module):
 
         aug_features = self._data_augment_(self.features)
         # (batch_size * num_fl_leaves, num_dc_inner_nodes)
-        path_prob = self.sigmoid(
-            self.beta_dc * self.dc_inner_nodes(aug_features)
-        )
+        path_prob = self.beta_dc * self.dc_inner_nodes(aug_features)
+
         # batch_size * num_fl_leaves
         feature_batch_size = self.features.shape[0]
 
         path_prob = torch.unsqueeze(path_prob, dim=2)
         # (batch_size * num_fl_leaves, num_dc_inner_nodes, 2)
-        path_prob = torch.cat((path_prob, 1 - path_prob), dim=2)
+        path_prob = torch.cat(
+            (self.LeakyReLU(path_prob), self.LeakyReLU(-path_prob)),
+            dim=2
+        )
         # (batch_size * num_fl_leaves, 1, 1)
         _mu = aug_features.data.new(feature_batch_size, 1, 1).fill_(1.)
 
@@ -231,12 +239,12 @@ class CDT(nn.Module):
             _path_prob = path_prob[:, begin_idx:end_idx, :]
 
             _mu = _mu.view(feature_batch_size, -1, 1).repeat(1, 1, 2)
-            _mu = _mu * _path_prob
+            _mu = _mu + _path_prob
             begin_idx = end_idx  # index for each layer
             end_idx = begin_idx + 2 ** (layer_idx + 1)
         # (batch_size * num_fl_leaves, num_dc_inner_nodes)
         mu = _mu.view(feature_batch_size, self.num_dc_leaves)
-        return mu
+        return self.softmax(mu)
 
     def decision_leaves(self, p):
         if self.args["classification"]:

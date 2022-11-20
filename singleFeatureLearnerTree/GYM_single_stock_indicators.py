@@ -66,7 +66,7 @@ class DerivativesTradingEnv(gym.Env):
     def __init__(
         self, df, train_end_ratio=None, n_lookback=30,
         trade_length=5, derivative_type=TimedTrailingStop(),
-        ignore_indicators=[]
+        ignore_indicators=[], reward_weight=1
     ):
         super().__init__()
 
@@ -81,6 +81,7 @@ class DerivativesTradingEnv(gym.Env):
         self.n_lookback = n_lookback
         self.trade_length = trade_length # action space? (0, np.inf)
         self.derivative_type = derivative_type
+        self.reward_weight = reward_weight
 
         # Actions of the format [Q-Sell, Q-Do nothing (=0), Q-Buy]
         self.action_space = spaces.Box(
@@ -128,7 +129,7 @@ class DerivativesTradingEnv(gym.Env):
         return (self.derivative_type.make_order(
             lookahead / current_price,
             order_type=action_type
-        ) - 1) * 100
+        ) - 1) * self.reward_weight
 
     def step(self, action):
         # Execute one time step within the environment
